@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from sqlalchemy import text
-from app.database import engine
+from sqlalchemy.orm import Session
+from app.database import get_db, engine
+from app.routers import customers
+from app import models
+from app.base import Base
 app = FastAPI()
-@app.get("/health")
-def health_check():
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        return {"status": "ok",
-                "database": "connected"}
-    except Exception:
-        return {"status": "error",
-                "database": "not connected"}
+Base.metadata.create_all(bind=engine)
+app.include_router(customers.router)
+@app.get("")
+def root():
+    return {"message": "Loan application service is running"}

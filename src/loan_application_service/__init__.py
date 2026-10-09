@@ -1,2 +1,2 @@
-git push -u origin maindef main() -> None:
+def main() -> None:
     print("Hello from loan-application-service!")

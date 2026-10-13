@@ -1,289 +1,279 @@
-\# Loan Application Service
+# Loan Application Service
 
+## Overview
 
+The Loan Application Service is a REST API built with FastAPI to manage customer information and loan applications. It uses PostgreSQL for data storage, SQLAlchemy for database operations, Alembic for database migrations, and JWT-based authentication for protected loan operations.
 
-\## Overview
+## Features
 
+- Create, retrieve, update, and delete customers.
+- Create and manage loan applications.
+- Validate customer information, including email and phone number.
+- Calculate monthly loan EMIs.
+- Authenticate users with JWT access tokens.
+- Enforce role-based permissions for customers and officers.
+- Restrict customers to viewing and applying for loans linked to their own customer accounts.
+- Handle errors such as missing records, duplicate emails, invalid loan tenures, and unauthorized requests.
+- Manage database schema changes using Alembic.
+- Run automated tests using pytest.
+- Check code quality and formatting using Ruff.
 
+## Technology Stack
 
-The Loan Application Service is a REST API built using FastAPI to manage customer information and loan applications. It uses PostgreSQL for data storage and SQLAlchemy for database operations.
+- Python 3.12
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- Alembic
+- Pydantic and Pydantic Settings
+- PyJWT
+- pwdlib
+- pytest
+- Ruff
+- uv
 
-
-
-\## Features
-
-
-
-\* Create, retrieve, update, and delete customers.
-
-\* Create, retrieve, update, and delete loan applications.
-
-\* Validate customer information, including email and phone number.
-
-\* Calculate monthly loan EMIs.
-
-\* Handle errors such as missing customers, missing loans, and duplicate email addresses.
-
-\* Manage database schema changes using Alembic.
-
-\* Run automated tests using pytest.
-
-
-
-\## Technology Stack
-
-
-
-\* Python 3.12
-
-\* FastAPI
-
-\* SQLAlchemy
-
-\* PostgreSQL
-
-\* Alembic
-
-\* Pydantic
-
-\* pytest
-
-\* Ruff
-
-\* uv
-
-
-
-\## Prerequisites
-
-
+## Prerequisites
 
 Install the following before running the application:
 
+- Python 3.12
+- uv
+- PostgreSQL, locally or through Docker
+- Git
 
+## Installation and Setup
 
-\* Python 3.12
-
-\* uv
-
-\* PostgreSQL, either locally or through Docker
-
-
-
-\## Installation and Setup
-
-
-
-\### 1. Install dependencies
-
-
-
-From the project root directory, run:
-
-
+### 1. Clone the repository
 
 ```powershell
-
-uv sync --dev
-
+git clone <repository-url>
+cd Loan-Application-Service
 ```
 
+Replace `<repository-url>` with your repository URL.
 
+### 2. Install dependencies
 
-\### 2. Configure environment variables
+```powershell
+uv sync --dev
+```
 
+### 3. Configure environment variables
 
+Create a `.env` file in the project root.
 
-Create a `.env` file in the project root with the following settings:
-
-
+Example configuration:
 
 ```dotenv
-
-DATABASE\_URL=postgresql+psycopg://postgres:YOUR\_PASSWORD@localhost:5432/loan\_db
-
-APP\_NAME="Loan Application Service"
-
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/loan_db
+APP_NAME="Loan Application Service"
 DEBUG=false
-
+JWT_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
+Replace the database credentials with your local PostgreSQL settings. Ensure the `loan_db` database exists and PostgreSQL is running.
 
+Use a strong, randomly generated JWT secret for local development and production. Never commit `.env` files or real credentials to Git.
 
-Replace `YOUR\_PASSWORD` with your PostgreSQL password. Ensure the database exists and PostgreSQL is running.
+The environment variable names must match the settings defined in `app/config.py`.
 
+### 4. Apply database migrations
 
-
-Do not commit `.env` or actual database credentials to version control.
-
-
-
-\### 3. Start the application
-
-
-
-Run the following command:
-
-
+Check the current migration revision:
 
 ```powershell
-
-uv run uvicorn app.main:app --reload
-
+uv run alembic current
 ```
 
+Apply migrations when setting up a new, correctly configured database:
 
+```powershell
+uv run alembic upgrade head
+```
+
+Back up existing databases and verify the target database before applying migrations.
+
+### 5. Start the application
+
+```powershell
+uv run uvicorn app.main:app --reload
+```
 
 The API will be available at:
 
+- **Base URL:** http://127.0.0.1:8000
+- **Swagger UI:** http://127.0.0.1:8000/docs
+- **ReDoc:** http://127.0.0.1:8000/redoc
 
+## Authentication
 
-\* \*\*Base URL:\*\* http://127.0.0.1:8000
+The login endpoint accepts OAuth2 password-form fields. The email address is supplied in the `username` field.
 
-\* \*\*Swagger UI:\*\* http://127.0.0.1:8000/docs
+### Login
 
-\* \*\*ReDoc:\*\* http://127.0.0.1:8000/redoc
+**Endpoint:** `POST /api/auth/login`
 
+Form fields:
 
+- `username`: registered user's email address
+- `password`: user's password
 
-\## API Endpoints
-
-
-
-\### Customer APIs
-
-
-
-| Method | Endpoint                       | Description                 |
-
-| ------ | ------------------------------ | --------------------------- |
-
-| POST   | `/api/customers/`              | Create a customer           |
-
-| GET    | `/api/customers/`              | Retrieve all customers      |
-
-| GET    | `/api/customers/{customer\_id}` | Retrieve a customer by ID   |
-
-| PUT    | `/api/customers/{customer\_id}` | Replace customer details    |
-
-| PATCH  | `/api/customers/{customer\_id}` | Partially update a customer |
-
-| DELETE | `/api/customers/{customer\_id}` | Delete a customer           |
-
-
-
-\### Loan APIs
-
-
-
-| Method | Endpoint               | Description                    |
-
-| ------ | ---------------------- | ------------------------------ |
-
-| POST   | `/api/loans/`          | Create a loan application      |
-
-| GET    | `/api/loans/`          | Retrieve all loan applications |
-
-| GET    | `/api/loans/{loan\_id}` | Retrieve a loan by ID          |
-
-| PUT    | `/api/loans/{loan\_id}` | Replace loan details           |
-
-| PATCH  | `/api/loans/{loan\_id}` | Partially update a loan        |
-
-| DELETE | `/api/loans/{loan\_id}` | Delete a loan                  |
-
-
-
-\## Database Migrations
-
-
-
-Check the current database migration revision:
-
-
+Example using PowerShell:
 
 ```powershell
+$body = @{
+    username = "customer@example.com"
+    password = "YOUR_TEST_PASSWORD"
+}
 
-uv run alembic current
+$response = Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://127.0.0.1:8000/api/auth/login" `
+    -ContentType "application/x-www-form-urlencoded" `
+    -Body $body
 
+$token = $response.access_token
 ```
 
+Use the returned access token in requests to protected loan endpoints:
 
+```powershell
+$headers = @{
+    Authorization = "Bearer $token"
+}
+
+Invoke-RestMethod `
+    -Method Get `
+    -Uri "http://127.0.0.1:8000/api/loans/" `
+    -Headers $headers
+```
+
+Access tokens expire according to the configured token lifetime. Log in again to obtain a new token when necessary.
+
+### Roles and permissions
+
+- **CUSTOMER:** Can create loan applications for their linked customer record and view their own loans.
+- **OFFICER:** Can view all loans, create loan applications, update loans, and delete loans.
+- Requests to protected endpoints without a valid token are rejected.
+- Customers cannot update or delete loans through the protected loan endpoints.
+
+Customer accounts must be linked to an existing customer record to use customer-specific loan operations.
+
+## API Endpoints
+
+### Authentication APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/auth/login` | Authenticate and obtain an access token |
+
+### Customer APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/customers/` | Create a customer |
+| GET | `/api/customers/` | Retrieve customers |
+| GET | `/api/customers/{customer_id}` | Retrieve a customer by ID |
+| PUT | `/api/customers/{customer_id}` | Replace customer details |
+| PATCH | `/api/customers/{customer_id}` | Partially update a customer |
+| DELETE | `/api/customers/{customer_id}` | Delete a customer |
+
+### Loan APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/loans/` | Create a loan application |
+| GET | `/api/loans/` | Retrieve permitted loan applications |
+| GET | `/api/loans/{loan_id}` | Retrieve a permitted loan by ID |
+| PUT | `/api/loans/{loan_id}` | Update a loan; officer access required |
+| PATCH | `/api/loans/{loan_id}` | Partially update a loan; officer access required |
+| DELETE | `/api/loans/{loan_id}` | Delete a loan; officer access required |
+
+Use Swagger UI at `/docs` to explore request schemas and try the endpoints. For protected operations, authorize with a bearer token.
+
+## Database Migrations
+
+View the current revision:
+
+```powershell
+uv run alembic current
+```
+
+View migration history:
+
+```powershell
+uv run alembic history
+```
 
 Check whether the database schema matches the SQLAlchemy models:
 
-
-
 ```powershell
-
 uv run alembic check
-
 ```
 
-
-
-For a new database that has been configured correctly, apply migrations using:
-
-
+Apply migrations:
 
 ```powershell
-
 uv run alembic upgrade head
-
 ```
 
+Back up existing databases before schema changes.
 
+## Testing
 
-\*\*Important:\*\* Back up existing databases before schema changes. Confirm the database schema and migration state before applying migrations to a database that already contains data.
-
-
-
-\## Testing
-
-
-
-Run the automated tests:
-
-
+Run the automated test suite:
 
 ```powershell
-
 uv run pytest
-
 ```
 
-
-
-Check code quality using Ruff:
-
-
+Check code quality:
 
 ```powershell
-
 uv run ruff check .
-
 ```
 
-
-
-Check code formatting:
-
-
+Verify code formatting:
 
 ```powershell
-
 uv run ruff format --check .
-
 ```
 
+## Project Structure
 
+```text
+Loan-Application-Service/
+├── alembic/
+│   └── versions/
+├── app/
+│   ├── routers/
+│   │   ├── auth.py
+│   │   ├── customers.py
+│   │   └── loans.py
+│   ├── services/
+│   ├── auth.py
+│   ├── config.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   ├── schemas.py
+│   └── security.py
+├── scripts/
+│   └── create_test_user.py
+├── tests/
+├── .env
+├── .gitignore
+├── alembic.ini
+├── pyproject.toml
+└── README.md
+```
 
-\## Security
+## Security
 
-
-
-\* Keep `.env` files and database backups out of Git.
-
-\* Do not commit passwords, secrets, or production credentials.
-
-\* Back up the database before making schema changes.
+- Never commit passwords, `.env` files, database credentials, or production secrets.
+- Store password hashes rather than plaintext passwords.
+- Use a strong JWT signing secret and keep it private.
+- Use HTTPS and appropriate secret management in production.
+- Back up the database before making schema changes.
+- Use least-privilege database credentials and restrict access to protected endpoints.

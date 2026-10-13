@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 
 from app.base import Base
 from app.database import engine
-from app.routers import customers, loans
+from app.routers import auth, customers, loans
 
 # Configure logger
 logging.basicConfig(
@@ -48,6 +48,8 @@ async def log_requests(request: Request, call_next):
 app.include_router(customers.router, prefix="/api")
 
 app.include_router(loans.router, prefix="/api")
+
+app.include_router(auth.router, prefix="/api")
 
 
 @app.get("/")

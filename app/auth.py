@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
@@ -56,6 +56,7 @@ def decode_access_token(token: str) -> dict:
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
@@ -87,6 +88,8 @@ def get_current_user(
             detail="User no longer exists",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    request.state.user_id = user.id
 
     return user
 

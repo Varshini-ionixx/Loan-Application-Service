@@ -16,6 +16,17 @@ from app.services.loan_service import (
 router = APIRouter(prefix="/loans", tags=["Loans"])
 
 
+def ensure_customer_linked(user: User) -> int:
+    """Return the linked customer ID or reject an unlinked customer."""
+    if user.customer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not linked to a customer record",
+        )
+
+    return user.customer_id
+
+
 @router.post(
     "/",
     response_model=LoanResponse,
@@ -26,14 +37,11 @@ def create_loan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Customers can apply only for themselves; officers can apply for any customer."""
     if current_user.role == "CUSTOMER":
-        if current_user.customer_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account is not linked to a customer record",
-            )
+        customer_id = ensure_customer_linked(current_user)
 
-        if loan.customer_id != current_user.customer_id:
+        if loan.customer_id != customer_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can apply for loans only for your own customer account",
@@ -42,7 +50,7 @@ def create_loan(
     elif current_user.role != "OFFICER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions",
+            detail="You do not have permission to apply for loans",
         )
 
     return apply_loan(db, loan)
@@ -53,21 +61,19 @@ def read_loans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Officers see all loans; customers see only their own loans."""
+    loans = get_loans(db)
+
     if current_user.role == "OFFICER":
-        return get_loans(db)
+        return loans
 
     if current_user.role == "CUSTOMER":
-        if current_user.customer_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account is not linked to a customer record",
-            )
-
-        return db.query(Loan).filter(Loan.customer_id == current_user.customer_id).all()
+        customer_id = ensure_customer_linked(current_user)
+        return [loan for loan in loans if loan.customer_id == customer_id]
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Insufficient permissions",
+        detail="You do not have permission to view loans",
     )
 
 
@@ -77,29 +83,26 @@ def read_loan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Customers can view only their own loans; officers can view any loan."""
     loan = get_loan(db, loan_id)
 
     if current_user.role == "OFFICER":
         return loan
 
     if current_user.role == "CUSTOMER":
-        if current_user.customer_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account is not linked to a customer record",
-            )
+        customer_id = ensure_customer_linked(current_user)
 
-        if loan.customer_id != current_user.customer_id:
+        if loan.customer_id != customer_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You cannot access another customer's loan",
+                detail="You do not have permission to view this loan",
             )
 
         return loan
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Insufficient permissions",
+        detail="You do not have permission to view loans",
     )
 
 
@@ -108,25 +111,29 @@ def update_loan(
     loan_id: int,
     loan: LoanUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_officer),
+    officer: User = Depends(require_officer),
 ):
+    """Only officers can replace loan details."""
     return edit_loan(db, loan_id, loan)
 
 
 @router.patch("/{loan_id}", response_model=LoanResponse)
-def patch_loan(
+def partially_update_loan(
     loan_id: int,
     loan: LoanUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_officer),
+    officer: User = Depends(require_officer),
 ):
+    """Only officers can update loan details."""
     return edit_loan(db, loan_id, loan)
 
 
-@router.delete("/{loan_id}")
+@router.delete("/{loan_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_loan(
     loan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_officer),
+    officer: User = Depends(require_officer),
 ):
-    return remove_loan(db, loan_id)
+    """Only officers can delete loans."""
+    remove_loan(db, loan_id)
+    return None

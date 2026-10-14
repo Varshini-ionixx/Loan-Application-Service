@@ -4,7 +4,6 @@ from app.models import User
 
 def create_test_user(db_session, role, customer_id=None):
     email = f"{role.lower()}-{customer_id or 'test'}@example.com"
-
     user = db_session.query(User).filter(User.email == email).first()
 
     if user is None:
@@ -29,7 +28,6 @@ def create_test_customer(
     phone="9876543210",
 ):
     officer_headers = create_test_user(db_session, "OFFICER")
-
     response = client.post(
         "/api/customers/",
         json={
@@ -39,7 +37,6 @@ def create_test_customer(
         },
         headers=officer_headers,
     )
-
     assert response.status_code == 201, response.text
     return response.json()["id"]
 
@@ -58,7 +55,7 @@ def test_apply_loan(client, db_session):
         headers=headers,
     )
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == 201
     data = response.json()
     assert data["customer_id"] == customer_id
     assert data["amount"] == 100000
@@ -104,14 +101,12 @@ def test_apply_loan_rejects_invalid_tenure(client, db_session):
 
 def test_customer_cannot_apply_for_another_customer(client, db_session):
     customer_id = create_test_customer(client, db_session)
-
     other_customer_id = create_test_customer(
         client,
         db_session,
         email="bob@example.com",
         phone="9876543211",
     )
-
     headers = create_test_user(db_session, "CUSTOMER", customer_id)
 
     response = client.post(
@@ -140,7 +135,7 @@ def test_list_loans(client, db_session):
         },
         headers=headers,
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 201
 
     response = client.get("/api/loans/", headers=headers)
 
@@ -169,7 +164,7 @@ def test_update_loan(client, db_session):
         },
         headers=headers,
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 201
     loan_id = created.json()["id"]
 
     response = client.patch(
@@ -195,7 +190,7 @@ def test_customer_cannot_update_loan(client, db_session):
         },
         headers=officer_headers,
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 201
     loan_id = created.json()["id"]
 
     customer_headers = create_test_user(db_session, "CUSTOMER", customer_id)
@@ -221,16 +216,76 @@ def test_delete_loan(client, db_session):
         },
         headers=headers,
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 201
     loan_id = created.json()["id"]
 
-    response = client.delete(
-        f"/api/loans/{loan_id}",
-        headers=headers,
-    )
+    response = client.delete(f"/api/loans/{loan_id}", headers=headers)
 
     assert response.status_code == 204
     assert response.content == b""
 
     missing = client.get(f"/api/loans/{loan_id}", headers=headers)
     assert missing.status_code == 404
+
+
+def test_customer_without_linked_record_cannot_apply_for_loan(client, db_session):
+    headers = create_test_user(db_session, "CUSTOMER")
+
+    response = client.post(
+        "/api/loans/",
+        json={
+            "customer_id": 1,
+            "amount": 100000,
+            "tenure_months": 12,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == (
+        "Your account is not linked to a customer record"
+    )
+
+
+def test_customer_without_linked_record_cannot_list_loans(client, db_session):
+    headers = create_test_user(db_session, "CUSTOMER")
+
+    response = client.get("/api/loans/", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == (
+        "Your account is not linked to a customer record"
+    )
+
+
+def test_customer_cannot_view_another_customers_loan(client, db_session):
+    customer_id = create_test_customer(client, db_session)
+    officer_headers = create_test_user(db_session, "OFFICER")
+
+    created = client.post(
+        "/api/loans/",
+        json={
+            "customer_id": customer_id,
+            "amount": 100000,
+            "tenure_months": 12,
+        },
+        headers=officer_headers,
+    )
+    assert created.status_code == 201
+    loan_id = created.json()["id"]
+
+    other_customer_id = create_test_customer(
+        client,
+        db_session,
+        email="bob@example.com",
+        phone="9876543211",
+    )
+    other_customer_headers = create_test_user(db_session, "CUSTOMER", other_customer_id)
+
+    response = client.get(
+        f"/api/loans/{loan_id}",
+        headers=other_customer_headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == ("You do not have permission to view this loan")

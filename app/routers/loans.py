@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_officer
 from app.database import get_db
-from app.models import Loan, User
+from app.models import User
 from app.schemas import LoanCreate, LoanResponse, LoanUpdate
 from app.services.loan_service import (
     apply_loan,
@@ -136,4 +136,3 @@ def delete_loan(
 ):
     """Only officers can delete loans."""
     remove_loan(db, loan_id)
-    return None

@@ -98,4 +98,3 @@ def delete_customer(
 ):
     """Only officers can delete customer records."""
     remove_customer(db, customer_id)
-    return None

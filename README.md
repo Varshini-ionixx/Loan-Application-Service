@@ -10,47 +10,48 @@ The Loan Application Service is a REST API built with FastAPI to manage customer
 - Create and manage loan applications.
 - Validate customer information, including email and phone number.
 - Calculate monthly loan EMIs.
-- Authenticate users with JWT access tokens.
-- Enforce role-based permissions for customers and officers.
-- Restrict customers to viewing and applying for loans linked to their own customer accounts.
-- Handle errors such as missing records, duplicate emails, invalid loan tenures, and unauthorized requests.
+- Authenticate users using JWT bearer tokens.
+- Apply role-based access control for customers and loan officers.
+- Restrict customers to viewing and managing only their authorized loan information.
 - Manage database schema changes using Alembic.
-- Run automated tests using pytest.
-- Check code quality and formatting using Ruff.
+- Run automated tests and code-quality checks through CI.
 
 ## Technology Stack
 
-- Python 3.12
-- FastAPI
-- SQLAlchemy
-- PostgreSQL
-- Alembic
-- Pydantic and Pydantic Settings
-- PyJWT
-- pwdlib
-- pytest
-- Ruff
-- uv
+- **Language:** Python 3.12
+- **API framework:** FastAPI
+- **Database:** PostgreSQL
+- **ORM:** SQLAlchemy
+- **Database migrations:** Alembic
+- **Data validation:** Pydantic and Pydantic Settings
+- **Authentication:** JWT
+- **Password hashing:** pwdlib
+- **Testing:** pytest
+- **Linting and formatting:** Ruff
+- **Dependency management:** uv
+- **Containerization:** Docker and Docker Compose
 
 ## Prerequisites
 
-Install the following before running the application:
+Install or configure the following before running the application locally:
 
 - Python 3.12
 - uv
-- PostgreSQL, locally or through Docker
+- Docker Desktop with Docker Compose, or a compatible PostgreSQL installation
 - Git
 
-## Installation and Setup
+## Installation and Configuration
 
 ### 1. Clone the repository
 
 ```powershell
-git clone <repository-url>
+git clone <YOUR_REPOSITORY_URL>
 cd Loan-Application-Service
 ```
 
-Replace `<repository-url>` with your repository URL.
+Replace `<YOUR_REPOSITORY_URL>` with the actual repository URL.
+
+If the repository is already cloned, open PowerShell in the project directory instead.
 
 ### 2. Install dependencies
 
@@ -60,64 +61,127 @@ uv sync --dev
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the project root.
+Create a `.env` file in the project root. Configure the variables required by `app/config.py`.
 
-Example configuration:
+Example for running the application locally on your computer:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/loan_db
-APP_NAME="Loan Application Service"
+APP_NAME=Loan Application Service
 DEBUG=false
-JWT_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
+JWT_SECRET_KEY=REPLACE_WITH_A_STRONG_RANDOM_SECRET
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-Replace the database credentials with your local PostgreSQL settings. Ensure the `loan_db` database exists and PostgreSQL is running.
+Replace the example database password and JWT secret with your own values.
 
-Use a strong, randomly generated JWT secret for local development and production. Never commit `.env` files or real credentials to Git.
+**Database URL configuration depends on where the application runs:**
 
-The environment variable names must match the settings defined in `app/config.py`.
+- When running the API directly on your computer, use `localhost` if PostgreSQL is exposed on port `5432`.
+- When running the API inside Docker and connecting to the separately running `loan_postgres` container, use `host.docker.internal` as the hostname, with port `5432`.
 
-### 4. Apply database migrations
+For example, the Docker database URL would use this format:
 
-Check the current migration revision:
-
-```powershell
-uv run alembic current
+```dotenv
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@host.docker.internal:5432/loan_db
 ```
 
-Apply migrations when setting up a new, correctly configured database:
+Use the appropriate database URL for your execution environment. Never commit `.env` or real credentials to version control.
+
+### 4. Start the database
+
+The current Docker Compose configuration defines the `api` service. PostgreSQL runs separately in the `loan_postgres` container.
+
+If the PostgreSQL container already exists and is running, you do not need to start another database container.
+
+Check the running containers:
+
+```powershell
+docker ps
+```
+
+If you use a separate PostgreSQL installation, ensure that the database specified in `DATABASE_URL` exists and is accessible.
+
+### 5. Apply database migrations
+
+Run migrations from the project directory:
 
 ```powershell
 uv run alembic upgrade head
 ```
 
-Back up existing databases and verify the target database before applying migrations.
+Ensure PostgreSQL is running and that `DATABASE_URL` points to the correct database for your current environment.
 
-### 5. Start the application
+### 6. Start the application locally
+
+For local development:
 
 ```powershell
 uv run uvicorn app.main:app --reload
 ```
 
-The API will be available at:
+The API should be available at:
 
-- **Base URL:** http://127.0.0.1:8000
-- **Swagger UI:** http://127.0.0.1:8000/docs
-- **ReDoc:** http://127.0.0.1:8000/redoc
+- **Base URL:** http://localhost:8000
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+The root endpoint (`GET /`) returns a message confirming that the service is running.
+
+## API Endpoints
+
+The API endpoints are grouped under the `/api` prefix, except for the root health-check endpoint.
+
+### General
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Check whether the application is running |
+
+### Authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/auth/login` | Authenticate a user and obtain a JWT access token |
+
+### Customers
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/customers/` | Create a customer |
+| GET | `/api/customers/` | Retrieve customers |
+| GET | `/api/customers/{customer_id}` | Retrieve a customer by ID |
+| PUT | `/api/customers/{customer_id}` | Replace customer information |
+| PATCH | `/api/customers/{customer_id}` | Partially update customer information |
+| DELETE | `/api/customers/{customer_id}` | Delete a customer |
+
+### Loans
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/loans/` | Apply for a loan |
+| GET | `/api/loans/` | Retrieve loans accessible to the authenticated user |
+| GET | `/api/loans/{loan_id}` | Retrieve a loan by ID |
+| PUT | `/api/loans/{loan_id}` | Replace loan information |
+| PATCH | `/api/loans/{loan_id}` | Partially update loan information |
+| DELETE | `/api/loans/{loan_id}` | Delete a loan |
+
+Protected endpoints require a valid bearer token. Actual permissions depend on the authenticated user's role.
+
+Refer to the automatically generated Swagger documentation at `/docs` for request schemas, response models, and endpoint details.
 
 ## Authentication
 
-The login endpoint accepts OAuth2 password-form fields. The email address is supplied in the `username` field.
+The service uses JWT bearer authentication for protected operations.
 
-### Login
+### Logging in
 
 **Endpoint:** `POST /api/auth/login`
 
-Form fields:
+The login endpoint accepts form data:
 
-- `username`: registered user's email address
-- `password`: user's password
+- `username`: the registered user's email address
+- `password`: the user's password
 
 Example using PowerShell:
 
@@ -129,14 +193,14 @@ $body = @{
 
 $response = Invoke-RestMethod `
     -Method Post `
-    -Uri "http://127.0.0.1:8000/api/auth/login" `
+    -Uri "http://localhost:8000/api/auth/login" `
     -ContentType "application/x-www-form-urlencoded" `
     -Body $body
 
 $token = $response.access_token
 ```
 
-Use the returned access token in requests to protected loan endpoints:
+Use the returned token when calling protected endpoints:
 
 ```powershell
 $headers = @{
@@ -145,56 +209,39 @@ $headers = @{
 
 Invoke-RestMethod `
     -Method Get `
-    -Uri "http://127.0.0.1:8000/api/loans/" `
+    -Uri "http://localhost:8000/api/loans/" `
     -Headers $headers
 ```
 
-Access tokens expire according to the configured token lifetime. Log in again to obtain a new token when necessary.
+The token expires according to the configured access-token lifetime. Authenticate again to obtain a new token when necessary.
 
 ### Roles and permissions
 
-- **CUSTOMER:** Can create loan applications for their linked customer record and view their own loans.
-- **OFFICER:** Can view all loans, create loan applications, update loans, and delete loans.
-- Requests to protected endpoints without a valid token are rejected.
-- Customers cannot update or delete loans through the protected loan endpoints.
+**CUSTOMER**
 
-Customer accounts must be linked to an existing customer record to use customer-specific loan operations.
+- Can access loan information associated with their linked customer record.
+- Can apply for a loan only for their linked customer record.
+- Cannot update or delete loans through officer-only endpoints.
 
-## API Endpoints
+**OFFICER**
 
-### Authentication APIs
+- Can view all loans.
+- Can create loan applications for customers.
+- Can update and delete loans through the officer-protected endpoints.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/auth/login` | Authenticate and obtain an access token |
-
-### Customer APIs
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/customers/` | Create a customer |
-| GET | `/api/customers/` | Retrieve customers |
-| GET | `/api/customers/{customer_id}` | Retrieve a customer by ID |
-| PUT | `/api/customers/{customer_id}` | Replace customer details |
-| PATCH | `/api/customers/{customer_id}` | Partially update a customer |
-| DELETE | `/api/customers/{customer_id}` | Delete a customer |
-
-### Loan APIs
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/loans/` | Create a loan application |
-| GET | `/api/loans/` | Retrieve permitted loan applications |
-| GET | `/api/loans/{loan_id}` | Retrieve a permitted loan by ID |
-| PUT | `/api/loans/{loan_id}` | Update a loan; officer access required |
-| PATCH | `/api/loans/{loan_id}` | Partially update a loan; officer access required |
-| DELETE | `/api/loans/{loan_id}` | Delete a loan; officer access required |
-
-Use Swagger UI at `/docs` to explore request schemas and try the endpoints. For protected operations, authorize with a bearer token.
+Requests to protected endpoints must include a valid JWT. The application enforces authorization based on the authenticated user's role and customer association.
 
 ## Database Migrations
 
-View the current revision:
+Alembic manages database schema changes.
+
+Apply all pending migrations:
+
+```powershell
+uv run alembic upgrade head
+```
+
+Display the current database revision:
 
 ```powershell
 uv run alembic current
@@ -206,19 +253,21 @@ View migration history:
 uv run alembic history
 ```
 
-Check whether the database schema matches the SQLAlchemy models:
+Generate a migration from model changes:
+
+```powershell
+uv run alembic revision --autogenerate -m "describe schema change"
+```
+
+Review generated migration files before applying them. Autogenerated migrations should always be checked for correctness.
+
+Check whether model changes require a migration:
 
 ```powershell
 uv run alembic check
 ```
 
-Apply migrations:
-
-```powershell
-uv run alembic upgrade head
-```
-
-Back up existing databases before schema changes.
+Back up important database data before applying schema changes, especially in shared or production environments.
 
 ## Testing
 
@@ -228,52 +277,185 @@ Run the automated test suite:
 uv run pytest
 ```
 
-Check code quality:
+Run Ruff lint checks:
 
 ```powershell
 uv run ruff check .
 ```
 
-Verify code formatting:
+Check code formatting:
 
 ```powershell
 uv run ruff format --check .
 ```
 
+To format the code if needed:
+
+```powershell
+uv run ruff format .
+```
+
+Resolve test failures, lint errors, and formatting issues before submitting changes.
+
+## Docker Setup
+
+The current `docker-compose.yml` defines the `api` service. The `loan_postgres` database container is managed separately.
+
+Build and start the API service:
+
+```powershell
+docker compose up --build -d
+```
+
+List services managed by Compose:
+
+```powershell
+docker compose ps
+```
+
+View API logs:
+
+```powershell
+docker compose logs api
+```
+
+Follow API logs continuously:
+
+```powershell
+docker compose logs -f api
+```
+
+View PostgreSQL logs:
+
+```powershell
+docker logs loan_postgres
+```
+
+The API container runs the Alembic migrations before starting Uvicorn. Ensure that the database is running and reachable using the database URL configured for Docker.
+
 ## Project Structure
 
 ```text
 Loan-Application-Service/
+├── .github/
+│   └── workflows/
 ├── alembic/
-│   └── versions/
 ├── app/
-│   ├── routers/
-│   │   ├── auth.py
-│   │   ├── customers.py
-│   │   └── loans.py
-│   ├── services/
+│   ├── __init__.py
 │   ├── auth.py
+│   ├── base.py
 │   ├── config.py
 │   ├── database.py
+│   ├── exceptions.py
+│   ├── logging_config.py
 │   ├── main.py
 │   ├── models.py
 │   ├── schemas.py
-│   └── security.py
+│   ├── security.py
+│   ├── repositories/
+│   │   ├── customer_repository.py
+│   │   └── loan_repository.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── customers.py
+│   │   └── loans.py
+│   └── services/
+│       ├── customer_service.py
+│       └── loan_service.py
 ├── scripts/
-│   └── create_test_user.py
+├── src/
 ├── tests/
-├── .env
+├── .dockerignore
+├── .env.example
 ├── .gitignore
+├── .python-version
 ├── alembic.ini
+├── docker-compose.yml
+├── Dockerfile
 ├── pyproject.toml
-└── README.md
+├── README.md
+└── uv.lock
 ```
+
+The tree shows the main application files and repository directories. The `scripts/`, `src/`, `alembic/`, and `tests/` directories may contain additional files not listed here.
+
+The `.env` file contains local configuration and should not be committed. Database backup files and generated caches are also excluded from this documentation tree.
 
 ## Security
 
-- Never commit passwords, `.env` files, database credentials, or production secrets.
-- Store password hashes rather than plaintext passwords.
-- Use a strong JWT signing secret and keep it private.
-- Use HTTPS and appropriate secret management in production.
-- Back up the database before making schema changes.
-- Use least-privilege database credentials and restrict access to protected endpoints.
+- Store passwords as secure hashes, never as plaintext.
+- Use a strong, randomly generated JWT secret.
+- Keep `.env` files, passwords, tokens, and database credentials out of version control.
+- Validate incoming request data with the application's schemas.
+- Enforce authentication and authorization on protected endpoints.
+- Use HTTPS and securely managed secrets in production.
+- Use database credentials with only the permissions the application needs.
+- Back up important data before schema changes or database maintenance.
+- Avoid logging passwords, authentication tokens, or other sensitive information.
+
+## Continuous Integration
+
+GitHub Actions runs automated quality checks when changes are pushed to configured branches or when a pull request targets `main`.
+
+The workflow checks:
+
+- Ruff linting.
+- Ruff formatting.
+- Automated tests using pytest.
+
+Review the workflow run in the repository's GitHub Actions tab if a check fails.
+
+## Troubleshooting
+
+### Missing environment variables
+
+Verify that `.env` exists in the project root and contains the variables required by `app/config.py`. Confirm that the variable names match the settings defined by the application.
+
+### Database connection errors
+
+Check that PostgreSQL is running, the database exists, and the credentials in `DATABASE_URL` match the configured PostgreSQL credentials.
+
+If the application runs inside Docker, use `host.docker.internal` to connect to the separately running PostgreSQL container. When running the API directly on your computer, use `localhost` if PostgreSQL is exposed on port `5432`.
+
+### Migration errors
+
+Check the current database revision and review migration history before applying further migrations. Back up existing data before making schema changes.
+
+### API container keeps restarting
+
+Inspect the API container logs:
+
+```powershell
+docker compose logs api
+```
+
+Inspect the PostgreSQL container logs:
+
+```powershell
+docker logs loan_postgres
+```
+
+Check the environment configuration and database connectivity if the API cannot start.
+
+## Stopping the Application
+
+Stop the API service managed by Docker Compose:
+
+```powershell
+docker compose down
+```
+
+The separately managed PostgreSQL container will not necessarily stop when you run this command.
+
+To stop PostgreSQL without deleting its persisted data:
+
+```powershell
+docker stop loan_postgres
+```
+
+Only remove a database container or volume if you intentionally want to delete the associated database data. Confirm where your PostgreSQL data is stored before removing any container or volume.
+
+## License
+
+Add the applicable license information here if the project is distributed under a specific license.

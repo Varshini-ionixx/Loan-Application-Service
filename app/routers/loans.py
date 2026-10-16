@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_officer
 from app.database import get_db
 from app.models import User
-from app.schemas import LoanCreate, LoanResponse, LoanUpdate
+from app.schemas import (
+    LoanCreate,
+    LoanPageResponse,
+    LoanResponse,
+    LoanUpdate,
+)
 from app.services.loan_service import (
     apply_loan,
     edit_loan,
@@ -56,24 +61,34 @@ def create_loan(
     return apply_loan(db, loan)
 
 
-@router.get("/", response_model=list[LoanResponse])
+@router.get("/", response_model=LoanPageResponse)
 def read_loans(
+    status_filter: str | None = Query(default=None, alias="status", max_length=20),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Officers see all loans; customers see only their own loans."""
-    loans = get_loans(db)
-
     if current_user.role == "OFFICER":
-        return loans
-
-    if current_user.role == "CUSTOMER":
+        customer_id = None
+    elif current_user.role == "CUSTOMER":
         customer_id = ensure_customer_linked(current_user)
-        return [loan for loan in loans if loan.customer_id == customer_id]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view loans",
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="You do not have permission to view loans",
+    status_filter = status_filter.strip() if status_filter else None
+    status_filter = status_filter or None
+
+    return get_loans(
+        db,
+        status_filter=status_filter,
+        customer_id=customer_id,
+        page=page,
+        size=size,
     )
 
 

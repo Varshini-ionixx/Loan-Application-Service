@@ -14,7 +14,6 @@ from app.schemas import LoanCreate, LoanUpdate
 
 
 def calculate_emi(amount: float, rate: float, tenure: int):
-
     monthly_rate = rate / (12 * 100)
 
     emi = (amount * monthly_rate * (1 + monthly_rate) ** tenure) / (
@@ -25,35 +24,41 @@ def calculate_emi(amount: float, rate: float, tenure: int):
 
 
 def apply_loan(db: Session, loan_data: LoanCreate):
+    try:
+        customer = get_customer_by_id(db, loan_data.customer_id)
 
-    customer = get_customer_by_id(db, loan_data.customer_id)
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
+        rate_map = {12: 10, 24: 11, 36: 12, 48: 13, 60: 13}
+        rate = rate_map.get(loan_data.tenure_months)
 
-    rate_map = {12: 10, 24: 11, 36: 12, 48: 13, 60: 13}
+        if rate is None:
+            raise HTTPException(status_code=400, detail="Invalid tenure")
 
-    rate = rate_map.get(loan_data.tenure_months)
+        emi = calculate_emi(loan_data.amount, rate, loan_data.tenure_months)
 
-    if rate is None:
-        raise HTTPException(status_code=400, detail="Invalid tenure")
+        loan = Loan(
+            customer_id=loan_data.customer_id,
+            amount=loan_data.amount,
+            tenure_months=loan_data.tenure_months,
+            interest_rate=rate,
+            monthly_emi=emi,
+            status="APPROVED",
+        )
 
-    emi = calculate_emi(loan_data.amount, rate, loan_data.tenure_months)
+        created_loan = create_loan(db, loan)
+        db.commit()
+        db.refresh(created_loan)
 
-    loan = Loan(
-        customer_id=loan_data.customer_id,
-        amount=loan_data.amount,
-        tenure_months=loan_data.tenure_months,
-        interest_rate=rate,
-        monthly_emi=emi,
-        status="APPROVED",
-    )
+        return created_loan
 
-    return create_loan(db, loan)
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_loan(db: Session, loan_id: int):
-
     loan = get_loan_by_id(db, loan_id)
 
     if not loan:
@@ -62,30 +67,64 @@ def get_loan(db: Session, loan_id: int):
     return loan
 
 
-def get_loans(db: Session):
+def get_loans(
+    db: Session,
+    status_filter: str | None = None,
+    customer_id: int | None = None,
+    page: int = 1,
+    size: int = 10,
+):
+    loans, total = get_all_loans(
+        db,
+        status_filter=status_filter,
+        customer_id=customer_id,
+        page=page,
+        size=size,
+    )
 
-    return get_all_loans(db)
+    pages = (total + size - 1) // size
+
+    return {
+        "items": loans,
+        "page": page,
+        "size": size,
+        "total": total,
+        "pages": pages,
+    }
 
 
 def edit_loan(db: Session, loan_id: int, loan_data: LoanUpdate):
+    try:
+        loan = get_loan_by_id(db, loan_id)
 
-    loan = get_loan_by_id(db, loan_id)
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
 
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        data = loan_data.model_dump(exclude_unset=True)
+        updated_loan = update_loan(db, loan, data)
 
-    data = loan_data.model_dump(exclude_unset=True)
+        db.commit()
+        db.refresh(updated_loan)
 
-    return update_loan(db, loan, data)
+        return updated_loan
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def remove_loan(db: Session, loan_id: int):
+    try:
+        loan = get_loan_by_id(db, loan_id)
 
-    loan = get_loan_by_id(db, loan_id)
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
 
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        delete_loan(db, loan)
+        db.commit()
 
-    delete_loan(db, loan)
+        return {"message": "Loan deleted successfully"}
 
-    return {"message": "Loan deleted successfully"}
+    except Exception:
+        db.rollback()
+        raise

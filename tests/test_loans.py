@@ -140,7 +140,105 @@ def test_list_loans(client, db_session):
     response = client.get("/api/loans/", headers=headers)
 
     assert response.status_code == 200
-    assert len(response.json()) == 1
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["customer_id"] == customer_id
+    assert data["page"] == 1
+    assert data["size"] == 10
+    assert data["total"] == 1
+    assert data["pages"] == 1
+
+
+def test_list_loans_supports_pagination(client, db_session):
+    customer_id = create_test_customer(client, db_session)
+    headers = create_test_user(db_session, "OFFICER")
+
+    for amount in (100000, 200000, 300000):
+        response = client.post(
+            "/api/loans/",
+            json={
+                "customer_id": customer_id,
+                "amount": amount,
+                "tenure_months": 12,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201
+
+    first_page = client.get("/api/loans/?page=1&size=2", headers=headers)
+    second_page = client.get("/api/loans/?page=2&size=2", headers=headers)
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+
+    first_data = first_page.json()
+    second_data = second_page.json()
+
+    assert len(first_data["items"]) == 2
+    assert first_data["page"] == 1
+    assert first_data["size"] == 2
+    assert first_data["total"] == 3
+    assert first_data["pages"] == 2
+
+    assert len(second_data["items"]) == 1
+    assert second_data["page"] == 2
+    assert second_data["total"] == 3
+    assert second_data["pages"] == 2
+
+    first_ids = {loan["id"] for loan in first_data["items"]}
+    second_ids = {loan["id"] for loan in second_data["items"]}
+    assert first_ids.isdisjoint(second_ids)
+
+
+def test_list_loans_filters_by_status(client, db_session):
+    customer_id = create_test_customer(client, db_session)
+    headers = create_test_user(db_session, "OFFICER")
+
+    created = client.post(
+        "/api/loans/",
+        json={
+            "customer_id": customer_id,
+            "amount": 100000,
+            "tenure_months": 12,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201
+
+    loan_id = created.json()["id"]
+    updated = client.patch(
+        f"/api/loans/{loan_id}",
+        json={"status": "UNDER_REVIEW"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+
+    approved_response = client.get(
+        "/api/loans/?status=approved",
+        headers=headers,
+    )
+    review_response = client.get(
+        "/api/loans/?status=UNDER_REVIEW",
+        headers=headers,
+    )
+
+    assert approved_response.status_code == 200
+    assert approved_response.json()["total"] == 0
+    assert approved_response.json()["items"] == []
+
+    assert review_response.status_code == 200
+    assert review_response.json()["total"] == 1
+    assert review_response.json()["items"][0]["status"] == "UNDER_REVIEW"
+
+
+def test_list_loans_rejects_invalid_pagination_parameters(client, db_session):
+    headers = create_test_user(db_session, "OFFICER")
+
+    invalid_page = client.get("/api/loans/?page=0", headers=headers)
+    invalid_size = client.get("/api/loans/?size=101", headers=headers)
+
+    assert invalid_page.status_code == 422
+    assert invalid_size.status_code == 422
 
 
 def test_get_missing_loan_returns_404(client, db_session):

@@ -15,7 +15,6 @@ class CustomerCreate(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value):
-
         if len(value.strip()) < 3:
             raise ValueError("Name must contain at least 3 characters")
 
@@ -24,7 +23,6 @@ class CustomerCreate(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, value):
-
         if len(value) != 10:
             raise ValueError("Phone number must contain exactly 10 digits")
 
@@ -42,7 +40,6 @@ class CustomerUpdate(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, value):
-
         if value is not None:
             if len(value) != 10:
                 raise ValueError("Phone number must contain exactly 10 digits")
@@ -93,6 +90,14 @@ class LoanResponse(BaseModel):
     applied_on: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LoanPageResponse(BaseModel):
+    items: list[LoanResponse]
+    page: int
+    size: int
+    total: int
+    pages: int
 
 
 class Token(BaseModel):

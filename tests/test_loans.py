@@ -1,5 +1,33 @@
 from app.auth import create_access_token
-from app.models import User
+from app.models import Customer, User
+
+# Sample customers from the training guide (Day 2 and Day 4).
+SAMPLE_PROFILES = {
+    "C101": {
+        "age": 38,
+        "monthly_income": 85000,
+        "existing_emi": 12000,
+        "credit_score": 745,
+    },
+    "C102": {
+        "age": 29,
+        "monthly_income": 60000,
+        "existing_emi": 0,
+        "credit_score": 790,
+    },
+    "C103": {
+        "age": 52,
+        "monthly_income": 40000,
+        "existing_emi": 22000,
+        "credit_score": 680,
+    },
+    "C105": {
+        "age": 33,
+        "monthly_income": 70000,
+        "existing_emi": 8000,
+        "credit_score": 670,
+    },
+}
 
 
 def create_test_user(db_session, role, customer_id=None):
@@ -26,6 +54,7 @@ def create_test_customer(
     db_session,
     email="alice@example.com",
     phone="9876543210",
+    profile=None,
 ):
     officer_headers = create_test_user(db_session, "OFFICER")
     response = client.post(
@@ -34,6 +63,7 @@ def create_test_customer(
             "name": "Alice Smith",
             "email": email,
             "phone": phone,
+            **(profile or SAMPLE_PROFILES["C101"]),
         },
         headers=officer_headers,
     )
@@ -387,3 +417,102 @@ def test_customer_cannot_view_another_customers_loan(client, db_session):
 
     assert response.status_code == 403
     assert response.json()["detail"] == ("You do not have permission to view this loan")
+
+
+def apply_for_sample_customer(
+    client, db_session, sample_id, amount, tenure_months, profile=None
+):
+    customer_id = create_test_customer(
+        client,
+        db_session,
+        email=f"{sample_id.lower()}@example.com",
+        phone=f"98765{sample_id[1:]:0>5}",
+        profile=profile or SAMPLE_PROFILES[sample_id],
+    )
+    headers = create_test_user(db_session, "OFFICER")
+
+    response = client.post(
+        "/api/loans/",
+        json={
+            "customer_id": customer_id,
+            "amount": amount,
+            "tenure_months": tenure_months,
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_eligible_customer_is_approved(client, db_session):
+    loan = apply_for_sample_customer(client, db_session, "C101", 500000, 36)
+
+    assert loan["status"] == "APPROVED"
+    assert loan["rejection_reason"] is None
+
+
+def test_amount_above_ten_lakh_is_referred(client, db_session):
+    loan = apply_for_sample_customer(client, db_session, "C102", 1200000, 60)
+
+    assert loan["status"] == "REFERRED"
+    assert "senior manager approval" in loan["rejection_reason"]
+
+
+def test_failed_burden_rule_is_rejected(client, db_session):
+    loan = apply_for_sample_customer(client, db_session, "C103", 400000, 24)
+
+    assert loan["status"] == "REJECTED"
+    assert loan["rejection_reason"] == (
+        "Existing EMI plus new EMI exceeds 50% of monthly income"
+    )
+
+
+def test_credit_score_between_650_and_699_is_referred(client, db_session):
+    loan = apply_for_sample_customer(client, db_session, "C105", 300000, 36)
+
+    assert loan["status"] == "REFERRED"
+    assert "referred to a credit officer" in loan["rejection_reason"]
+
+
+def test_rejection_lists_every_failed_rule(client, db_session):
+    ineligible = {
+        "age": 65,
+        "monthly_income": 20000,
+        "existing_emi": 15000,
+        "credit_score": 600,
+    }
+    loan = apply_for_sample_customer(
+        client, db_session, "C900", 100000, 12, profile=ineligible
+    )
+
+    assert loan["status"] == "REJECTED"
+    assert loan["rejection_reason"].split("; ") == [
+        "Age must be between 21 and 60",
+        "Monthly income must be at least 25000",
+        "Credit score must be at least 650",
+        "Existing EMI plus new EMI exceeds 50% of monthly income",
+    ]
+
+
+def test_customer_without_eligibility_profile_cannot_apply(client, db_session):
+    customer = Customer(
+        name="Old Customer", email="old@example.com", phone="9000000000"
+    )
+    db_session.add(customer)
+    db_session.commit()
+    headers = create_test_user(db_session, "OFFICER")
+
+    response = client.post(
+        "/api/loans/",
+        json={
+            "customer_id": customer.id,
+            "amount": 100000,
+            "tenure_months": 12,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Customer profile is missing: age, monthly_income, existing_emi, credit_score"
+    )

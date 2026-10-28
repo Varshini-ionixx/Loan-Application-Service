@@ -19,6 +19,16 @@ class Customer(Base):
 
     phone: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
 
+    # Eligibility profile; nullable because customers created before these
+    # columns existed have no values until an officer fills them in.
+    age: Mapped[int | None] = mapped_column(nullable=True)
+
+    monthly_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    existing_emi: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    credit_score: Mapped[int | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None)
     )

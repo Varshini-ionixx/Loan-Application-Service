@@ -1,6 +1,13 @@
 from app.auth import create_access_token
 from app.models import User
 
+PROFILE = {
+    "age": 38,
+    "monthly_income": 85000,
+    "existing_emi": 12000,
+    "credit_score": 745,
+}
+
 
 def create_test_user(db_session, role, customer_id=None):
     user = User(
@@ -24,6 +31,7 @@ def create_test_customer(client, headers):
             "name": "Alice Smith",
             "email": "alice@example.com",
             "phone": "9876543210",
+            **PROFILE,
         },
         headers=headers,
     )
@@ -45,6 +53,7 @@ def test_create_customer(client, db_session):
             "name": "Alice Smith",
             "email": "alice@example.com",
             "phone": "9876543210",
+            **PROFILE,
         },
         headers=headers,
     )
@@ -54,7 +63,41 @@ def test_create_customer(client, db_session):
     assert data["name"] == "Alice Smith"
     assert data["email"] == "alice@example.com"
     assert data["phone"] == "9876543210"
+    assert data["age"] == 38
+    assert data["monthly_income"] == 85000
+    assert data["existing_emi"] == 12000
+    assert data["credit_score"] == 745
     assert "id" in data
+
+
+def test_create_customer_requires_eligibility_profile(client, db_session):
+    headers = create_test_user(db_session, "OFFICER")
+    response = client.post(
+        "/api/customers/",
+        json={
+            "name": "Alice Smith",
+            "email": "alice@example.com",
+            "phone": "9876543210",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+def test_create_customer_rejects_out_of_range_credit_score(client, db_session):
+    headers = create_test_user(db_session, "OFFICER")
+    response = client.post(
+        "/api/customers/",
+        json={
+            "name": "Alice Smith",
+            "email": "alice@example.com",
+            "phone": "9876543210",
+            **PROFILE,
+            "credit_score": 1000,
+        },
+        headers=headers,
+    )
+    assert response.status_code == 422
 
 
 def test_create_customer_requires_authentication(client):
@@ -64,6 +107,7 @@ def test_create_customer_requires_authentication(client):
             "name": "Alice Smith",
             "email": "alice@example.com",
             "phone": "9876543210",
+            **PROFILE,
         },
     )
     assert response.status_code == 401
@@ -77,6 +121,7 @@ def test_customer_cannot_create_customer(client, db_session):
             "name": "Another Person",
             "email": "another@example.com",
             "phone": "9876543211",
+            **PROFILE,
         },
         headers=headers,
     )
@@ -91,6 +136,7 @@ def test_create_customer_rejects_short_name(client, db_session):
             "name": "Al",
             "email": "al@example.com",
             "phone": "9876543210",
+            **PROFILE,
         },
         headers=headers,
     )
@@ -105,6 +151,7 @@ def test_create_customer_rejects_invalid_phone(client, db_session):
             "name": "Alice Smith",
             "email": "alice@example.com",
             "phone": "12345",
+            **PROFILE,
         },
         headers=headers,
     )
@@ -117,6 +164,7 @@ def test_create_customer_rejects_duplicate_email(client, db_session):
         "name": "Alice Smith",
         "email": "alice@example.com",
         "phone": "9876543210",
+        **PROFILE,
     }
 
     first_response = client.post("/api/customers/", json=payload, headers=headers)
@@ -128,6 +176,7 @@ def test_create_customer_rejects_duplicate_email(client, db_session):
             "name": "Another Person",
             "email": "alice@example.com",
             "phone": "9876543211",
+            **PROFILE,
         },
         headers=headers,
     )

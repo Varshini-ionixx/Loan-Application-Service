@@ -184,6 +184,21 @@ GET /api/loans/?status=approved&page=1&size=10
 
 Use the valid loan status values defined by the application. The API enforces authorization so users only receive loans they are permitted to access.
 
+### Loan decision rules
+
+Customers carry an eligibility profile: `age`, `monthly_income`, `existing_emi` and `credit_score`. Each new loan application is decided in this priority order:
+
+1. **Profile incomplete:** the request is refused with `400` and the missing fields are listed.
+2. **REJECTED** if any rule fails, with every failed rule listed in `rejection_reason`:
+   - age is not between 21 and 60
+   - monthly income is below 25,000
+   - credit score is below 650
+   - existing EMI plus the new EMI is more than 50% of monthly income
+3. **REFERRED** to an officer if the credit score is between 650 and 699, or the amount is above 10,00,000. The reason is stored in `rejection_reason`.
+4. **APPROVED** otherwise.
+
+The interest rate depends on tenure: 12 months 10%, 24 months 11%, 36 months 12%, 48 and 60 months 13%. Other tenures are refused with `400`.
+
 Refer to Swagger UI at `/docs` for the complete request schemas, response models, validation rules, and available endpoint details.
 
 ## Authentication

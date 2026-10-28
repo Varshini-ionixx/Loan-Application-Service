@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # ==========================
 # Customer Schemas
@@ -11,6 +11,10 @@ class CustomerCreate(BaseModel):
     name: str
     email: EmailStr
     phone: str
+    age: int = Field(ge=18, le=100)
+    monthly_income: float = Field(ge=0)
+    existing_emi: float = Field(default=0, ge=0)
+    credit_score: int = Field(ge=300, le=900)
 
     @field_validator("name")
     @classmethod
@@ -36,6 +40,10 @@ class CustomerUpdate(BaseModel):
     name: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
+    age: int | None = Field(default=None, ge=18, le=100)
+    monthly_income: float | None = Field(default=None, ge=0)
+    existing_emi: float | None = Field(default=None, ge=0)
+    credit_score: int | None = Field(default=None, ge=300, le=900)
 
     @field_validator("phone")
     @classmethod
@@ -55,6 +63,10 @@ class CustomerResponse(BaseModel):
     name: str
     email: EmailStr
     phone: str
+    age: int | None
+    monthly_income: float | None
+    existing_emi: float | None
+    credit_score: int | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -35,6 +35,10 @@ dev = [
     "pytest-cov>=7.1.0",
 ]
 
+[tool.ruff]
+# The training project has its own pyproject.toml and is not part of the API
+extend-exclude = ["langchain-week"]
+
 [tool.ruff.lint]
 ignore = ["B008"]
 

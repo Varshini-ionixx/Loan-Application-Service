@@ -22,9 +22,7 @@ def add_customer(db: Session, customer_data: CustomerCreate):
             status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
         )
 
-    customer = Customer(
-        name=customer_data.name, email=customer_data.email, phone=customer_data.phone
-    )
+    customer = Customer(**customer_data.model_dump())
 
     return create_customer(db, customer)
 

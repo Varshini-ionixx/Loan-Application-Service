@@ -8,7 +8,6 @@ load_dotenv()
 
 api = LoanApiClient()
 
-
 @tool
 def emi_calculator(principal: float, annual_rate_percent: float, tenure_months: int) -> float | str:
     """Calculate the monthly EMI of a loan.
@@ -27,7 +26,6 @@ def emi_calculator(principal: float, annual_rate_percent: float, tenure_months: 
     return round(emi, 2)
 
 PROFILE_FIELDS = ("age", "monthly_income", "existing_emi", "credit_score")
-
 
 @tool
 def get_customer(customer_id: int) -> dict | str:
